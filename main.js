@@ -1,19 +1,33 @@
 var http = require('http');
 var url = require('url');
+var zlib = require('zlib');
 
 var host = process.env['HOST'] || '127.0.0.1';
 var port = process.env['PORT'] || 3000;
 
 var todos = ['sweep floors', 'take out rubbish'];
 
-function json_headers(body) {
-  var content_length = Buffer.byteLength(body, 'utf8').toString();
+function sendJson(status_code, response, body) {
+  //default headers sent by node are
+  //
+  // Connection: keep-alive
+  // Date: [Date]
+  // Transfer-Encoding: chunked
+
+  //Send a gzip'd response no matter what.
+  //If the request's Accept-Encoding does not
+  //allow for a gzip'd response then technically
+  //we should send a 406 Not Acceptable response
+  //but parsing the Accept-Encoding header would be difficult
   var headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': content_length,
+    'Content-Encoding': 'gzip',
     'X-Content-Type-Options': 'nosniff'
   }
-  return headers;
+
+  response.writeHead(status_code, headers);
+  var gzipped_body = zlib.gzipSync(body);
+  response.end(gzipped_body);
 }
 
 function router(req, res) {
@@ -45,8 +59,7 @@ function show(req, res, index) {
     var obj = todos[index];
     var body = JSON.stringify(obj);
 
-    res.writeHead(200, json_headers(body));
-    res.end(body);
+    sendJson(200, res, body);
   }
 }
 
@@ -54,8 +67,7 @@ function list(req, res) {
   var obj = {list: todos};
   var body = JSON.stringify(obj);
 
-  res.writeHead(200, json_headers(body));
-  res.end(body);
+  sendJson(200, res, body);
 }
 
 var server = http.createServer(router);
